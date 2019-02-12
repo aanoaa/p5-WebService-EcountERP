@@ -164,6 +164,22 @@ sub is_auth {
 
 =head2 parse_response($res, $expected_cnt)
 
+=over
+
+=item *
+
+C<$res>
+
+L<HTTP::Tiny> response object
+
+=item *
+
+C<$expected_cnt>
+
+Whether the criteria for success or not
+
+=back
+
 =cut
 
 sub parse_response {
