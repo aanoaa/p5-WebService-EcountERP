@@ -238,16 +238,23 @@ sub add {
     my ($self, $type, @params) = @_;
     return unless $type;
     return unless @params;
+    return unless $self->is_auth;
+
+    my $zone = $self->{login}{zone};
+    my $session_id = $self->{session_id};
 
     given($type) {
         when (/sellers/) {
-            return $self->_add_sellers(@params);
+            my $url = sprintf("https://oapi%s.ecounterp.com/OAPI/V2/AccountBasic/SaveBasicCust?SESSION_ID=%s", $zone, $session_id);
+            return $self->_add_sellers($url, 'CustList', @params);
         }
         when (/products/) {
-            return $self->_add_products(@params);
+            my $url = sprintf("https://oapi%s.ecounterp.com/OAPI/V2/InventoryBasic/SaveBasicProduct?SESSION_ID=%s", $zone, $session_id);
+            return $self->_add_products($url, 'ProductList', @params);
         }
         when (/quotations/) {
-            return $self->_add_quotations(@params);
+            my $url = sprintf("https://oapi%s.ecounterp.com/OAPI/V2/Quotation/SaveQuotation?SESSION_ID=%s", $zone, $session_id);
+            return $self->_add_quotations($url, 'QuotationList', @params);
         }
         default {
             warn "type not found: $type";
@@ -256,7 +263,7 @@ sub add {
     }
 }
 
-=head2 _add_sellers(@sellers)
+=head2 _add_sellers($url, $key, @sellers)
 
 L<https://login.ecounterp.com/ECERP/OAPI/OAPIView?lan_type=ko-KR#|거래처등록>
 
@@ -275,7 +282,7 @@ others are optional.
 =cut
 
 sub _add_sellers {
-    my ($self, @sellers) = @_;
+    my ($self, $url, $key, @sellers) = @_;
     return unless $self->is_auth;
 
     my @REQUIRED = qw/BUSINESS_NO CUST_NAME/;
@@ -288,16 +295,12 @@ sub _add_sellers {
                     CUST_LIMIT_TERM CONT1 CONT2 CONT3 CONT4 CONT5 CONT6 NO_CUST_USER1
                     NO_CUST_USER2 NO_CUST_USER3 CANCEL/;
 
-    my $key = 'CustList';
     my $params = $self->_build_bulk_data($key, \@REQUIRED, \@PARAMS, @sellers);
     unless ($params) {
         warn "Failed to build bulk data";
         return;
     }
 
-    my $zone = $self->{login}{zone};
-    my $session_id = $self->{session_id};
-    my $url = sprintf("https://oapi%s.ecounterp.com/OAPI/V2/AccountBasic/SaveBasicCust?SESSION_ID=%s", $zone, $session_id);
     my $http = $self->{http};
     my $json = encode_json $params;
     my $res = $http->post($url, {
@@ -316,7 +319,7 @@ sub _add_sellers {
     return $self->parse_response($res, $expected);
 }
 
-=head2 _add_products(@products)
+=head2 _add_products($url, $key, @products)
 
 L<https://login.ecounterp.com/ECERP/OAPI/OAPIView?lan_type=ko-KR#|품목등록>
 
@@ -335,7 +338,7 @@ others are optional.
 =cut
 
 sub _add_products {
-    my ($self, @products) = @_;
+    my ($self, $url, $key, @products) = @_;
     return unless $self->is_auth;
 
     my @REQUIRED = qw/PROD_CD PROD_DES/;
@@ -357,16 +360,12 @@ sub _add_products {
                     NO_USER8 NO_USER9 NO_USER10 ITEM_TYPE SERIAL_TYPE PROD_SELL_TYPE
                     PROD_WHMOVE_TYPE QC_BUY_TYPE QC_YN/;
 
-    my $key = 'ProductList';
     my $params = $self->_build_bulk_data($key, \@REQUIRED, \@PARAMS, @products);
     unless ($params) {
         warn "Failed to build bulk data";
         return;
     }
 
-    my $zone = $self->{login}{zone};
-    my $session_id = $self->{session_id};
-    my $url = sprintf("https://oapi%s.ecounterp.com/OAPI/V2/InventoryBasic/SaveBasicProduct?SESSION_ID=%s", $zone, $session_id);
     my $http = $self->{http};
     my $json = encode_json $params;
     my $res = $http->post($url, {
@@ -385,7 +384,7 @@ sub _add_products {
     return $self->parse_response($res, $expected);
 }
 
-=head2 _add_quotations(@quotations)
+=head2 _add_quotations($url, $key, @quotations)
 
 L<https://login.ecounterp.com/ECERP/OAPI/OAPIView?lan_type=ko-KR#|견적서입력>
 
@@ -429,7 +428,7 @@ product quantity
 =cut
 
 sub _add_quotations {
-    my ($self, @quotations) = @_;
+    my ($self, $url, $key, @quotations) = @_;
     return unless $self->is_auth;
 
     my @REQUIRED = qw/UPLOAD_SER_NO PROD_CD QTY/;
@@ -439,16 +438,12 @@ sub _add_quotations {
                     QTY PRICE USER_PRICE_VAT SUPPLY_AMT SUPPLY_AMT_F VAT_AMT REMARKS
                     ITEM_CD P_AMT1 P_AMT2 P_REMARKS1 P_REMARKS2 P_REMARKS3/;
 
-    my $key = 'QuotationList';
     my $params = $self->_build_bulk_data($key, \@REQUIRED, \@PARAMS, @quotations);
     unless ($params) {
         warn "Failed to build bulk data";
         return;
     }
 
-    my $zone = $self->{login}{zone};
-    my $session_id = $self->{session_id};
-    my $url = sprintf("https://oapi%s.ecounterp.com/OAPI/V2/Quotation/SaveQuotation?SESSION_ID=%s", $zone, $session_id);
     my $http = $self->{http};
     my $json = encode_json $params;
     my $res = $http->post($url, {
