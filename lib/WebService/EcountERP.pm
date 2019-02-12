@@ -462,6 +462,9 @@ sub _add_quotations {
     return $self->parse_response($res, $expected);
 }
 
+=head2 _build_bulk_data($key, \@required, \@params, @items)
+
+=cut
 sub _build_bulk_data {
     my ($self, $key, $required, $params, @items) = @_;
     return unless $key;
