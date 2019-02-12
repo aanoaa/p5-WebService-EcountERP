@@ -253,7 +253,7 @@ sub add {
     }
 }
 
-=head2 _add_sellers($code, $name, \@sellers)
+=head2 _add_sellers(@sellers)
 
 L<https://login.ecounterp.com/ECERP/OAPI/OAPIView?lan_type=ko-KR#|거래처등록>
 
@@ -313,7 +313,7 @@ sub _add_sellers {
     return $self->parse_response($res, $expected);
 }
 
-=head2 _add_products($code, $name, \@products)
+=head2 _add_products(@products)
 
 L<https://login.ecounterp.com/ECERP/OAPI/OAPIView?lan_type=ko-KR#|품목등록>
 
