@@ -147,6 +147,52 @@ sub new {
     return bless $self, $class;
 }
 
+=head2 is_auth
+
+=cut
+
+sub is_auth {
+    my $self = shift;
+
+    my $zone = $self->{login}{zone};
+    my $session_id = $self->{session_id};
+
+    return unless $zone;
+    return unless $session_id;
+    return 1;
+}
+
+=head2 parse_response($res, $expected_cnt)
+
+=cut
+
+sub parse_response {
+    my ($self, $res, $expected) = @_;
+
+    my $out = $res->{content};
+    my $result = decode_json $out;
+
+    my $success_cnt = $result->{Data}{SuccessCnt};
+    my $failed_cnt  = $result->{Data}{FailCnt};
+    if ($success_cnt != $expected) {
+        for my $detail (@{ $result->{Data}{ResultDetails} }) {
+            next if my $is_success = $detail->{IsSuccess};
+
+            my $n       = $detail->{Line};
+            my $error   = $detail->{TotalError};
+            warn "Line($n): $error";
+
+            for my $err (@{ $detail->{Errors} }) {
+                my $column  = $err->{ColCd};
+                my $message = $err->{Message};
+                warn "  $column: $message";
+            }
+        }
+    }
+
+    return $success_cnt;
+}
+
 =head2 add($type => \%params)
 
 C<$type> 에 따라 C<\%params> 가 바뀝니다.
@@ -200,62 +246,38 @@ others are optional.
 sub _add_products {
     my ($self, @products) = @_;
 
-    my $zone = $self->{login}{zone};
-    my $session_id = $self->{session_id};
+    return unless $self->is_auth;
 
-    return unless $zone;
-    return unless $session_id;
+    my @REQUIRED = qw/PROD_CD PROD_DES/;
+    my @PARAMS = qw/PROD_CD PROD_DES SIZE_FLAG SIZE_DES UNIT PROD_TYPE SET_FLAG BAL_FLAG
+                    WH_CD IN_PRICE IN_PRICE_VAT OUT_PRICE OUT_PRICE_VAT REMARKS_WIN
+                    CLASS_CD CLASS_CD2 CLASS_CD3 BAR_CODE VAT_YN TAX VAT_RATE_BY_BASE_YN
+                    VAT_RATE_BY CS_FLAG REMARKS INSPECT_TYPE_CD INSPECT_STATUS
+                    SAMPLE_PERCENT MAIN_PROD_CD MAIN_PROD_CONVERT_QTY INPUT_QTY EXCH_RATE
+                    DENO_RATE SAFE_A0001 SAFE_A0002 SAFE_A0003 SAFE_A0004 SAFE_A0005
+                    SAFE_A0006 SAFE_A0007 CSORD_C0001 CSORD_TEXT CSORD_C0003 IN_TERM
+                    MIN_QTY CUST OUT_PRICE1 OUT_PRICE1_VAT_YN OUT_PRICE2 OUT_PRICE2_VAT_YN
+                    OUT_PRICE3 OUT_PRICE3_VAT_YN OUT_PRICE4 OUT_PRICE4_VAT_YN OUT_PRICE5
+                    OUT_PRICE5_VAT_YN OUT_PRICE6 OUT_PRICE6_VAT_YN OUT_PRICE7
+                    OUT_PRICE7_VAT_YN OUT_PRICE8 OUT_PRICE8_VAT_YN OUT_PRICE9
+                    OUT_PRICE9_VAT_YN OUT_PRICE10 OUT_PRICE10_VAT_YN OUTSIDE_PRICE
+                    OUTSIDE_PRICE_VAT LABOR_WEIGHT EXPENSES_WEIGHT MATERIAL_COST
+                    EXPENSE_COST LABOR_COST OUT_COST CONT1 CONT2 CONT3 CONT4 CONT5 CONT6
+                    NO_USER1 NO_USER2 NO_USER3 NO_USER4 NO_USER5 NO_USER6 NO_USER7
+                    NO_USER8 NO_USER9 NO_USER10 ITEM_TYPE SERIAL_TYPE PROD_SELL_TYPE
+                    PROD_WHMOVE_TYPE QC_BUY_TYPE QC_YN/;
 
-    my %seen;
-    map { $seen{$_}++ } qw/PROD_CD PROD_DES SIZE_FLAG SIZE_DES UNIT PROD_TYPE SET_FLAG BAL_FLAG
-                           WH_CD IN_PRICE IN_PRICE_VAT OUT_PRICE OUT_PRICE_VAT REMARKS_WIN
-                           CLASS_CD CLASS_CD2 CLASS_CD3 BAR_CODE VAT_YN TAX VAT_RATE_BY_BASE_YN
-                           VAT_RATE_BY CS_FLAG REMARKS INSPECT_TYPE_CD INSPECT_STATUS
-                           SAMPLE_PERCENT MAIN_PROD_CD MAIN_PROD_CONVERT_QTY INPUT_QTY EXCH_RATE
-                           DENO_RATE SAFE_A0001 SAFE_A0002 SAFE_A0003 SAFE_A0004 SAFE_A0005
-                           SAFE_A0006 SAFE_A0007 CSORD_C0001 CSORD_TEXT CSORD_C0003 IN_TERM
-                           MIN_QTY CUST OUT_PRICE1 OUT_PRICE1_VAT_YN OUT_PRICE2 OUT_PRICE2_VAT_YN
-                           OUT_PRICE3 OUT_PRICE3_VAT_YN OUT_PRICE4 OUT_PRICE4_VAT_YN OUT_PRICE5
-                           OUT_PRICE5_VAT_YN OUT_PRICE6 OUT_PRICE6_VAT_YN OUT_PRICE7
-                           OUT_PRICE7_VAT_YN OUT_PRICE8 OUT_PRICE8_VAT_YN OUT_PRICE9
-                           OUT_PRICE9_VAT_YN OUT_PRICE10 OUT_PRICE10_VAT_YN OUTSIDE_PRICE
-                           OUTSIDE_PRICE_VAT LABOR_WEIGHT EXPENSES_WEIGHT MATERIAL_COST
-                           EXPENSE_COST LABOR_COST OUT_COST CONT1 CONT2 CONT3 CONT4 CONT5 CONT6
-                           NO_USER1 NO_USER2 NO_USER3 NO_USER4 NO_USER5 NO_USER6 NO_USER7
-                           NO_USER8 NO_USER9 NO_USER10 ITEM_TYPE SERIAL_TYPE PROD_SELL_TYPE
-                           PROD_WHMOVE_TYPE QC_BUY_TYPE QC_YN
-                          /;
-
-    my @productList;
-    my $line = 0;
-    for my $product (@products) {
-        unless ($product->{PROD_CD} or $product->{PROD_DES}) {
-            warn "PROD_CD and PROD_DES are needed";
-            next;
-        }
-
-        my %param;
-        for my $key (keys %$product) {
-            my $value = $product->{$key};
-            unless ($seen{$key}) {
-                warn "Invalid parameter: $key($value)";
-                next;
-            }
-
-            $param{$key} = $value;
-        }
-
-        push @productList, {
-            Line      => $line++,
-            BulkDatas => \%param,
-        };
+    my $params = $self->_build_bulk_data('ProductList', \@REQUIRED, \@PARAMS, @products);
+    unless ($params) {
+        warn "Failed to build bulk data";
+        return;
     }
 
-    my %params = (ProductList => \@productList);
-
+    my $zone = $self->{login}{zone};
+    my $session_id = $self->{session_id};
     my $url = sprintf("https://oapi%s.ecounterp.com/OAPI/V2/InventoryBasic/SaveBasicProduct?SESSION_ID=%s", $zone, $session_id);
     my $http = $self->{http};
-    my $json = encode_json \%params;
+    my $json = encode_json $params;
     my $res = $http->post($url, {
         headers => {
             'Content-Type' => 'application/json',
@@ -268,30 +290,48 @@ sub _add_products {
         return;
     }
 
-    my $out = $res->{content};
-    my $result = decode_json $out;
+    my $expected = scalar @{ $params->{ProductList} };
+    return $self->parse_response($res, $expected);
+}
 
-    my $success_cnt = $result->{Data}{SuccessCnt};
-    my $failed_cnt  = $result->{Data}{FailCnt};
-    if ($success_cnt != $line) {
-        for my $detail (@{ $result->{Data}{ResultDetails} }) {
-            next if my $is_success = $detail->{IsSuccess};
+sub _build_bulk_data {
+    my ($self, $key, $required, $params, @items) = @_;
+    return unless $key;
+    return unless $required;
+    return unless $params;
+    return unless @items;
 
-            my $n       = $detail->{Line};
-            my $error   = $detail->{TotalError};
-            warn "Line($n): $error";
+    my %available;
+    map { $available{$_}++ } @$params;
 
-            for my $err (@{ $detail->{Errors} }) {
-                my $column  = $err->{ColCd};
-                my $message = $err->{Message};
-                warn "  $column: $message";
+    my $line = 0;
+    my @data;
+    for my $item (@items) {
+        for my $field (@$required) {
+            unless ($item->{$field}) {
+                warn "$field is required";
+                next;
             }
         }
 
-        return;
+        my %param;
+        for my $key (keys %$item) {
+            my $value = $item->{$key};
+            unless ($available{$key}) {
+                warn "Invalid parameter: $key($value)";
+                next;
+            }
+
+            $param{$key} = $value;
+        }
+
+        push @data, {
+            Line      => $line++,
+            BulkDatas => \%param,
+        };
     }
 
-    return $success_cnt;
+    return { $key => \@data };
 }
 
 # login(로그인)
