@@ -127,7 +127,7 @@ sub new {
     if ($status !~ m/200/ ) {
         my $error  = $result->{Error}{Message} || "Unknown error occurred: $out";
         my $detail = $result->{Error}{MessageDetail};
-        warn "$error\n";
+        warn "$status: $error\n";
         warn "  $detail\n" if $detail;
         return;
     }
@@ -187,6 +187,15 @@ sub parse_response {
 
     my $out = $res->{content};
     my $result = decode_json $out;
+
+    my $status = $result->{Status};
+    if ($status !~ m/200/ ) {
+        my $error  = $result->{Error}{Message} || "Unknown error occurred: $out";
+        my $detail = $result->{Error}{MessageDetail};
+        warn "$status: $error\n";
+        warn "  $detail\n" if $detail;
+        return 0;
+    }
 
     my $success_cnt = $result->{Data}{SuccessCnt};
     my $failed_cnt  = $result->{Data}{FailCnt};
