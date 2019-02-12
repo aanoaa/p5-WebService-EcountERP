@@ -4,6 +4,8 @@ use utf8;
 use strict;
 use warnings;
 
+use experimental 'switch';
+
 use HTTP::Tiny;
 use JSON::PP;
 
@@ -43,9 +45,11 @@ our %LAN_TYPE = (
 
 L<로그인 API|https://login.ecounterp.com/ECERP/OAPI/OAPIView?lan_type=ko-KR>
 
-=over $lan_type
+=head3 C<$lan_type>
 
 language type
+
+=over
 
 =item *
 
@@ -111,20 +115,183 @@ sub new {
         content => $json,
     });
 
-    print "$res->{status}\n";
-    print "$res->{content}\n";
+    unless ($res->{success}) {
+        warn "$res->{status}: $res->{reason}\n";
+        return;
+    }
+
+    my $out = $res->{content};
+    my $result = decode_json $out;
+
+    my $status = $result->{Status};
+    if ($status !~ m/200/ ) {
+        my $error  = $result->{Error}{Message} || "Unknown error occurred: $out";
+        my $detail = $result->{Error}{MessageDetail};
+        warn "$error\n";
+        warn "  $detail\n" if $detail;
+        return;
+    }
+
+    my $session_id;
+    unless ($session_id = $result->{Data}{Datas}{SESSION_ID}) {
+        warn "Session ID not found: $out\n";
+        return;
+    }
+
+    my $self = {
+        login      => $login,
+        http       => $http,
+        session_id => $session_id,
+    };
+
+    return bless $self, $class;
+}
+
+=head2 add($type => \%params)
+
+C<$type> 에 따라 C<\%params> 가 바뀝니다.
+
+=head3 C<$type>
+
+=over
+
+=item *
+
+product: 품목등록
+
+=back
+
+=cut
+
+sub add {
+    my ($self, $type, @params) = @_;
+    return unless $type;
+    return unless @params;
+
+    given($type) {
+        when (/products/) {
+            return $self->_add_products(@params);
+        }
+        default {
+            warn "type not found: $type";
+            return;
+        }
+    }
+}
+
+=head2 _add_products($code, $name, \@products)
+
+L<https://login.ecounterp.com/ECERP/OAPI/OAPIView?lan_type=ko-KR#|품목등록>
+
+=head3 C<@products>
+
+keys C<PROD_CD> and C<PROD_DES> are required.
+others are optional.
+
+    [
+      {
+        PROD_CD  => '123',    # product code
+        PROD_DES => 'foo',    # product name or description
+      }
+    ]
+
+=cut
+
+sub _add_products {
+    my ($self, @products) = @_;
+
+    my $zone = $self->{login}{zone};
+    my $session_id = $self->{session_id};
+
+    return unless $zone;
+    return unless $session_id;
+
+    my %seen;
+    map { $seen{$_}++ } qw/PROD_CD PROD_DES SIZE_FLAG SIZE_DES UNIT PROD_TYPE SET_FLAG BAL_FLAG
+                           WH_CD IN_PRICE IN_PRICE_VAT OUT_PRICE OUT_PRICE_VAT REMARKS_WIN
+                           CLASS_CD CLASS_CD2 CLASS_CD3 BAR_CODE VAT_YN TAX VAT_RATE_BY_BASE_YN
+                           VAT_RATE_BY CS_FLAG REMARKS INSPECT_TYPE_CD INSPECT_STATUS
+                           SAMPLE_PERCENT MAIN_PROD_CD MAIN_PROD_CONVERT_QTY INPUT_QTY EXCH_RATE
+                           DENO_RATE SAFE_A0001 SAFE_A0002 SAFE_A0003 SAFE_A0004 SAFE_A0005
+                           SAFE_A0006 SAFE_A0007 CSORD_C0001 CSORD_TEXT CSORD_C0003 IN_TERM
+                           MIN_QTY CUST OUT_PRICE1 OUT_PRICE1_VAT_YN OUT_PRICE2 OUT_PRICE2_VAT_YN
+                           OUT_PRICE3 OUT_PRICE3_VAT_YN OUT_PRICE4 OUT_PRICE4_VAT_YN OUT_PRICE5
+                           OUT_PRICE5_VAT_YN OUT_PRICE6 OUT_PRICE6_VAT_YN OUT_PRICE7
+                           OUT_PRICE7_VAT_YN OUT_PRICE8 OUT_PRICE8_VAT_YN OUT_PRICE9
+                           OUT_PRICE9_VAT_YN OUT_PRICE10 OUT_PRICE10_VAT_YN OUTSIDE_PRICE
+                           OUTSIDE_PRICE_VAT LABOR_WEIGHT EXPENSES_WEIGHT MATERIAL_COST
+                           EXPENSE_COST LABOR_COST OUT_COST CONT1 CONT2 CONT3 CONT4 CONT5 CONT6
+                           NO_USER1 NO_USER2 NO_USER3 NO_USER4 NO_USER5 NO_USER6 NO_USER7
+                           NO_USER8 NO_USER9 NO_USER10 ITEM_TYPE SERIAL_TYPE PROD_SELL_TYPE
+                           PROD_WHMOVE_TYPE QC_BUY_TYPE QC_YN
+                          /;
+
+    my @productList;
+    my $line = 0;
+    for my $product (@products) {
+        unless ($product->{PROD_CD} or $product->{PROD_DES}) {
+            warn "PROD_CD and PROD_DES are needed";
+            next;
+        }
+
+        my %param;
+        for my $key (keys %$product) {
+            my $value = $product->{$key};
+            unless ($seen{$key}) {
+                warn "Invalid parameter: $key($value)";
+                next;
+            }
+
+            $param{$key} = $value;
+        }
+
+        push @productList, {
+            Line      => $line++,
+            BulkDatas => \%param,
+        };
+    }
+
+    my %params = (ProductList => \@productList);
+
+    my $url = sprintf("https://oapi%s.ecounterp.com/OAPI/V2/InventoryBasic/SaveBasicProduct?SESSION_ID=%s", $zone, $session_id);
+    my $http = $self->{http};
+    my $json = encode_json \%params;
+    my $res = $http->post($url, {
+        headers => {
+            'Content-Type' => 'application/json',
+        },
+        content => $json,
+    });
 
     unless ($res->{success}) {
         warn "$res->{status}: $res->{reason}\n";
         return;
     }
 
-    my $self = {
-        login => $login,
-        http  => $http,
-    };
+    my $out = $res->{content};
+    my $result = decode_json $out;
 
-    return bless $self, $class;
+    my $success_cnt = $result->{Data}{SuccessCnt};
+    my $failed_cnt  = $result->{Data}{FailCnt};
+    if ($success_cnt != $line) {
+        for my $detail (@{ $result->{Data}{ResultDetails} }) {
+            next if my $is_success = $detail->{IsSuccess};
+
+            my $n       = $detail->{Line};
+            my $error   = $detail->{TotalError};
+            warn "Line($n): $error";
+
+            for my $err (@{ $detail->{Errors} }) {
+                my $column  = $err->{ColCd};
+                my $message = $err->{Message};
+                warn "  $column: $message";
+            }
+        }
+
+        return;
+    }
+
+    return $success_cnt;
 }
 
 # login(로그인)
