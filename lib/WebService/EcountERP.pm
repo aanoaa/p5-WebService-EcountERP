@@ -260,6 +260,10 @@ sub add {
             my $url = sprintf("https://oapi%s.ecounterp.com/OAPI/V2/SaleOrder/SaveSaleOrder?SESSION_ID=%s", $zone, $session_id);
             return $self->_add_quotations($url, 'SaleOrderList', @params);
         }
+        when (/sales/) {
+            my $url = sprintf("https://oapi%s.ecounterp.com/OAPI/V2/Sale/SaveSale?SESSION_ID=%s", $zone, $session_id);
+            return $self->_add_sales($url, 'SaleList', @params);
+        }
         default {
             warn "type not found: $type";
             return;
@@ -552,6 +556,90 @@ sub _add_orders {
     return $self->parse_response($res, $expected);
 }
 
+=head2 _add_sales($url, $key, @sales)
+
+L<https://login.ecounterp.com/ECERP/OAPI/OAPIView?lan_type=ko-KR#|판매입력>
+
+=head3 C<@quotations>
+
+    {
+      UPLOAD_SER_NO => '1',
+      WH_CD         => '중앙창고',
+      PROD_CD       => 'xxx',
+      QTY           => '10',
+    }
+
+=over
+
+=item *
+
+C<UPLOAD_SER_NO>
+
+required
+
+If you want to bundle the same document, enter the same order number.
+동일한 전표로 묶고자 하는 경우 동일 순번을 입력
+
+=item *
+
+C<WH_CD>
+
+ERP warehouse code
+
+=item *
+
+C<PROD_CD>
+
+required
+
+ERP product code
+
+=item *
+
+C<QTY>
+
+required
+
+product quantity
+
+=back
+
+=cut
+
+sub _add_sales {
+    my ($self, $url, $key, @sales) = @_;
+    return unless $self->is_auth;
+
+    my @REQUIRED = qw/UPLOAD_SER_NO WH_CD PROD_CD QTY/;
+    my @PARAMS = qw/UPLOAD_SER_NO IO_DATE CUST CUST_DES EMP_CD WH_CD IO_TYPE EXCHANGE_TYPE
+                    EXCHANGE_RATE PJT_CD DOC_NO U_MEMO1 U_MEMO2 U_MEMO3 U_MEMO4 U_MEMO5
+                    U_TXT1 PROD_CD PROD_DES SIZE_DES UQTY QTY PRICE USER_PRICE_VAT
+                    SUPPLY_AMT SUPPLY_AMT_F VAT_AMT REMARKS ITEM_CD P_AMT1 P_AMT2
+                    P_REMARKS1 P_REMARKS2 P_REMARKS3 REL_DATE REL_NO MAKE_FLAG CUST_AMT/;
+
+    my $params = $self->_build_bulk_data($key, \@REQUIRED, \@PARAMS, @sales);
+    unless ($params) {
+        warn "Failed to build bulk data";
+        return;
+    }
+
+    my $http = $self->{http};
+    my $json = encode_json $params;
+    my $res = $http->post($url, {
+        headers => {
+            'Content-Type' => 'application/json',
+        },
+        content => $json,
+    });
+
+    unless ($res->{success}) {
+        warn "$res->{status}: $res->{reason}\n";
+        return;
+    }
+
+    my $expected = scalar @{ $params->{$key} };
+    return $self->parse_response($res, $expected);
+}
 
 =head2 _build_bulk_data($key, \@required, \@params, @items)
 
