@@ -261,7 +261,6 @@ others are optional.
 
 sub _add_products {
     my ($self, @products) = @_;
-
     return unless $self->is_auth;
 
     my @REQUIRED = qw/PROD_CD PROD_DES/;
@@ -283,7 +282,8 @@ sub _add_products {
                     NO_USER8 NO_USER9 NO_USER10 ITEM_TYPE SERIAL_TYPE PROD_SELL_TYPE
                     PROD_WHMOVE_TYPE QC_BUY_TYPE QC_YN/;
 
-    my $params = $self->_build_bulk_data('ProductList', \@REQUIRED, \@PARAMS, @products);
+    my $key = 'ProductList';
+    my $params = $self->_build_bulk_data($key, \@REQUIRED, \@PARAMS, @products);
     unless ($params) {
         warn "Failed to build bulk data";
         return;
@@ -306,7 +306,7 @@ sub _add_products {
         return;
     }
 
-    my $expected = scalar @{ $params->{ProductList} };
+    my $expected = scalar @{ $params->{$key} };
     return $self->parse_response($res, $expected);
 }
 
