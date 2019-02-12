@@ -466,7 +466,7 @@ sub _add_quotations {
     return $self->parse_response($res, $expected);
 }
 
-=head2 _add_orders($url, $key, @quotations)
+=head2 _add_orders($url, $key, @orders)
 
 L<https://login.ecounterp.com/ECERP/OAPI/OAPIView?lan_type=ko-KR#|주문서입력>
 
