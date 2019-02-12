@@ -231,6 +231,9 @@ sub add {
     return unless @params;
 
     given($type) {
+        when (/sellers/) {
+            return $self->_add_sellers(@params);
+        }
         when (/products/) {
             return $self->_add_products(@params);
         }
@@ -239,6 +242,66 @@ sub add {
             return;
         }
     }
+}
+
+=head2 _add_sellers($code, $name, \@sellers)
+
+L<https://login.ecounterp.com/ECERP/OAPI/OAPIView?lan_type=ko-KR#|거래처등록>
+
+=head3 C<@sellers>
+
+keys C<BUSINESS_NO> and C<CUST_NAME> are required.
+others are optional.
+
+    [
+      {
+        BUSINESS_NO => '1234567890',    # employer ID number
+        CUST_NAME   => 'foo',           # seller name
+      }
+    ]
+
+=cut
+
+sub _add_sellers {
+    my ($self, @sellers) = @_;
+    return unless $self->is_auth;
+
+    my @REQUIRED = qw/BUSINESS_NO CUST_NAME/;
+    my @PARAMS = qw/BUSINESS_NO CUST_NAME BOSS_NAME UPTAE JONGMOK TEL EMAIL POST_NO ADDR
+                    G_GUBUN G_BUSINESS_TYPE G_BUSINESS_CD TAX_REG_ID FAX HP_NO DM_POST
+                    DM_ADDR REMARKS_WIN GUBUN FOREIGN_FLAG EXCHANGE_CODE CUST_GROUP1
+                    CUST_GROUP2 URL_PATH REMARKS OUTORDER_YN IO_CODE_SL_BASE_YN IO_CODE_SL
+                    IO_CODE_BY_BASE_YN IO_CODE_BY EMP_CD MANAGE_BOND_NO MANAGE_DEBIT_NO
+                    CUST_LIMIT MAIN_CD O_RATE I_RATE PRICE_GROUP PRICE_GROUP2
+                    CUST_LIMIT_TERM CONT1 CONT2 CONT3 CONT4 CONT5 CONT6 NO_CUST_USER1
+                    NO_CUST_USER2 NO_CUST_USER3 CANCEL/;
+
+    my $key = 'CustList';
+    my $params = $self->_build_bulk_data($key, \@REQUIRED, \@PARAMS, @sellers);
+    unless ($params) {
+        warn "Failed to build bulk data";
+        return;
+    }
+
+    my $zone = $self->{login}{zone};
+    my $session_id = $self->{session_id};
+    my $url = sprintf("https://oapi%s.ecounterp.com/OAPI/V2/AccountBasic/SaveBasicCust?SESSION_ID=%s", $zone, $session_id);
+    my $http = $self->{http};
+    my $json = encode_json $params;
+    my $res = $http->post($url, {
+        headers => {
+            'Content-Type' => 'application/json',
+        },
+        content => $json,
+    });
+
+    unless ($res->{success}) {
+        warn "$res->{status}: $res->{reason}\n";
+        return;
+    }
+
+    my $expected = scalar @{ $params->{$key} };
+    return $self->parse_response($res, $expected);
 }
 
 =head2 _add_products($code, $name, \@products)
