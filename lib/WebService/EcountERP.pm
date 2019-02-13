@@ -264,7 +264,7 @@ sub add {
         }
         when (/orders/) {
             my $url = sprintf($URL_FORMAT, $zone, 'SaleOrder', 'SaveSaleOrder', $session_id);
-            return $self->_add_quotations($url, 'SaleOrderList', @params);
+            return $self->_add_orders($url, 'SaleOrderList', @params);
         }
         when (/sales/) {
             my $url = sprintf($URL_FORMAT, $zone, 'Sale', 'SaveSale', $session_id);
@@ -603,7 +603,6 @@ sub _add_orders {
     my ($self, $url, $key, @orders) = @_;
     return unless $self->is_auth;
 
-    my @REQUIRED = qw/UPLOAD_SER_NO WH_CD PROD_CD QTY/;
     my @PARAMS = qw/UPLOAD_SER_NO IO_DATE CUST CUST_DES EMP_CD WH_CD IO_TYPE EXCHANGE_TYPE
                     EXCHANGE_RATE PJT_CD DOC_NO REF_DES COLL_TERM AGREE_TERM TIME_DATE
                     REMARKS_WIN U_MEMO1 U_MEMO2 U_MEMO3 U_MEMO4 U_MEMO5 U_TXT1 PROD_CD
@@ -611,7 +610,22 @@ sub _add_orders {
                     SUPPLY_AMT_F VAT_AMT ITEM_TIME_DATE REMARKS ITEM_CD P_AMT1 P_AMT2
                     P_REMARKS1 P_REMARKS2 P_REMARKS3 REL_DATE REL_NO/;
 
-    my $params = $self->_build_bulk_data($key, \@REQUIRED, \@PARAMS, @orders);
+    my $rules = Validation::Class::Simple->new(
+        fields => {
+            UPLOAD_SER_NO  => { required => 1 },
+            WH_CD          => { required => 1, max_length => 5 },
+            PROD_CD        => { required => 1 },
+            QTY            => { required => 1 },
+            IO_TYPE        => { max_length => 2 },
+            EXCHANGE_TYPE  => { max_length => 5 },
+            TIME_DATE      => { max_length => 8 },
+            U_MEMO1        => { max_length => 6 },
+            ITEM_TIME_DATE => { max_length => 8 },
+            REL_DATE       => { max_length => 8 },
+        }
+    );
+
+    my $params = $self->_build_bulk_data($key, $rules, \@PARAMS, @orders);
     unless ($params) {
         warn "Failed to build bulk data";
         return;
