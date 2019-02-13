@@ -8,6 +8,7 @@ use experimental 'switch';
 
 use HTTP::Tiny;
 use JSON::PP;
+use Validation::Class::Simple;
 
 =encoding utf8
 
@@ -38,6 +39,8 @@ our %LAN_TYPE = (
     'es'    => 'Español',
     'id-ID' => 'Indonesian',
 );
+
+our $URL_FORMAT = 'https://oapi%s.ecounterp.com/OAPI/V2/%s/%s?SESSION_ID=%s';
 
 =head1 METHODS
 
@@ -248,23 +251,23 @@ sub add {
 
     given($type) {
         when (/sellers/) {
-            my $url = sprintf("https://oapi%s.ecounterp.com/OAPI/V2/AccountBasic/SaveBasicCust?SESSION_ID=%s", $zone, $session_id);
+            my $url = sprintf($URL_FORMAT, $zone, 'AccountBasic', 'SaveBasicCust', $session_id);
             return $self->_add_sellers($url, 'CustList', @params);
         }
         when (/products/) {
-            my $url = sprintf("https://oapi%s.ecounterp.com/OAPI/V2/InventoryBasic/SaveBasicProduct?SESSION_ID=%s", $zone, $session_id);
+            my $url = sprintf($URL_FORMAT, $zone, 'InventoryBasic', 'SaveBasicProduct', $session_id);
             return $self->_add_products($url, 'ProductList', @params);
         }
         when (/quotations/) {
-            my $url = sprintf("https://oapi%s.ecounterp.com/OAPI/V2/Quotation/SaveQuotation?SESSION_ID=%s", $zone, $session_id);
+            my $url = sprintf($URL_FORMAT, $zone, 'Quotation', 'SaveQuotation', $session_id);
             return $self->_add_quotations($url, 'QuotationList', @params);
         }
         when (/orders/) {
-            my $url = sprintf("https://oapi%s.ecounterp.com/OAPI/V2/SaleOrder/SaveSaleOrder?SESSION_ID=%s", $zone, $session_id);
+            my $url = sprintf($URL_FORMAT, $zone, 'SaleOrder', 'SaveSaleOrder', $session_id);
             return $self->_add_quotations($url, 'SaleOrderList', @params);
         }
         when (/sales/) {
-            my $url = sprintf("https://oapi%s.ecounterp.com/OAPI/V2/Sale/SaveSale?SESSION_ID=%s", $zone, $session_id);
+            my $url = sprintf($URL_FORMAT, $zone, 'Sale', 'SaveSale', $session_id);
             return $self->_add_sales($url, 'SaleList', @params);
         }
         default {
@@ -296,7 +299,6 @@ sub _add_sellers {
     my ($self, $url, $key, @sellers) = @_;
     return unless $self->is_auth;
 
-    my @REQUIRED = qw/BUSINESS_NO CUST_NAME/;
     my @PARAMS = qw/BUSINESS_NO CUST_NAME BOSS_NAME UPTAE JONGMOK TEL EMAIL POST_NO ADDR
                     G_GUBUN G_BUSINESS_TYPE G_BUSINESS_CD TAX_REG_ID FAX HP_NO DM_POST
                     DM_ADDR REMARKS_WIN GUBUN FOREIGN_FLAG EXCHANGE_CODE CUST_GROUP1
@@ -306,7 +308,27 @@ sub _add_sellers {
                     CUST_LIMIT_TERM CONT1 CONT2 CONT3 CONT4 CONT5 CONT6 NO_CUST_USER1
                     NO_CUST_USER2 NO_CUST_USER3 CANCEL/;
 
-    my $params = $self->_build_bulk_data($key, \@REQUIRED, \@PARAMS, @sellers);
+    my $regexYN = qr/^[YN]$/;
+    my $regexMBYN = qr/^[MBYN]$/;
+    my $rules = Validation::Class::Simple->new(
+        fields => {
+            BUSINESS_NO        => { required => 1 },
+            CUST_NAME          => { required => 1 },
+            G_GUBUN            => { pattern => qr/^0[123]$/ },
+            G_BUSINESS_TYPE    => { pattern => qr/^[123]$/ },
+            GUBUN              => { pattern => qr/^1[13]$/ }, # 일반거래처 : 11, 관세사거래처 : 13
+            FOREIGN_FLAG       => { pattern => $regexYN },
+            OUTORDER_YN        => { pattern => $regexYN },
+            IO_CODE_SL_BASE_YN => { pattern => $regexYN },
+            IO_CODE_BY_BASE_YN => { pattern => $regexYN },
+            MANAGE_BOND_NO     => { pattern => $regexMBYN },
+            MANAGE_DEBIT_NO    => { pattern => $regexMBYN },
+            CUST_LIMIT_TERM    => { between => '1-365' },
+            CANCEL             => { pattern => $regexYN },
+        }
+    );
+
+    my $params = $self->_build_bulk_data($key, $rules, \@PARAMS, @sellers);
     unless ($params) {
         warn "Failed to build bulk data";
         return;
@@ -644,14 +666,17 @@ sub _add_sales {
     return $self->parse_response($res, $expected);
 }
 
-=head2 _build_bulk_data($key, \@required, \@params, @items)
+=head2 _build_bulk_data($key, $rules, \@params, @items)
+
+C<$key> is string.
+
+C<$rules> is L<Validation::Class::Simple> object.
 
 =cut
 
 sub _build_bulk_data {
-    my ($self, $key, $required, $params, @items) = @_;
+    my ($self, $key, $rules, $params, @items) = @_;
     return unless $key;
-    return unless $required;
     return unless $params;
     return unless @items;
 
@@ -661,11 +686,10 @@ sub _build_bulk_data {
     my $line = 0;
     my @data;
     for my $item (@items) {
-        for my $field (@$required) {
-            unless (exists $item->{$field}) {
-                warn "$field is required";
-                next;
-            }
+        $rules->reset_params($item);
+        unless ($rules->validate) {
+            warn $rules->errors_to_string;
+            next;
         }
 
         my %param;
@@ -685,7 +709,7 @@ sub _build_bulk_data {
         };
     }
 
-    return { $key => \@data };
+    return @data ? { $key => \@data } : undef;
 }
 
 # login(로그인)
