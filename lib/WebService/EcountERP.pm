@@ -659,7 +659,7 @@ sub _build_bulk_data {
     my @data;
     for my $item (@items) {
         for my $field (@$required) {
-            unless ($item->{$field}) {
+            unless (exists $item->{$field}) {
                 warn "$field is required";
                 next;
             }
