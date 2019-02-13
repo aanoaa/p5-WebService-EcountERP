@@ -703,14 +703,27 @@ sub _add_sales {
     my ($self, $url, $key, @sales) = @_;
     return unless $self->is_auth;
 
-    my @REQUIRED = qw/UPLOAD_SER_NO WH_CD PROD_CD QTY/;
     my @PARAMS = qw/UPLOAD_SER_NO IO_DATE CUST CUST_DES EMP_CD WH_CD IO_TYPE EXCHANGE_TYPE
                     EXCHANGE_RATE PJT_CD DOC_NO U_MEMO1 U_MEMO2 U_MEMO3 U_MEMO4 U_MEMO5
                     U_TXT1 PROD_CD PROD_DES SIZE_DES UQTY QTY PRICE USER_PRICE_VAT
                     SUPPLY_AMT SUPPLY_AMT_F VAT_AMT REMARKS ITEM_CD P_AMT1 P_AMT2
                     P_REMARKS1 P_REMARKS2 P_REMARKS3 REL_DATE REL_NO MAKE_FLAG CUST_AMT/;
 
-    my $params = $self->_build_bulk_data($key, \@REQUIRED, \@PARAMS, @sales);
+    my $rules = Validation::Class::Simple->new(
+        fields => {
+            UPLOAD_SER_NO => { required => 1 },
+            WH_CD         => { required => 1, max_length => 5 },
+            PROD_CD       => { required => 1 },
+            QTY           => { required => 1 },
+            IO_TYPE       => { max_length => 2 },
+            EXCHANGE_TYPE => { max_length => 5 },
+            U_MEMO1       => { max_length => 6 },
+            REL_DATE      => { max_length => 8 },
+            MAKE_FLAG     => { pattern => qr/^[YN]$/ },
+        }
+    );
+
+    my $params = $self->_build_bulk_data($key, $rules, \@PARAMS, @sales);
     unless ($params) {
         warn "Failed to build bulk data";
         return;
