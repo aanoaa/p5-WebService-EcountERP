@@ -509,14 +509,23 @@ sub _add_quotations {
     my ($self, $url, $key, @quotations) = @_;
     return unless $self->is_auth;
 
-    my @REQUIRED = qw/UPLOAD_SER_NO PROD_CD QTY/;
     my @PARAMS = qw/UPLOAD_SER_NO IO_DATE CUST CUST_DES EMP_CD WH_CD IO_TYPE EXCHANGE_TYPE
                     EXCHANGE_RATE PJT_CD DOC_NO REF_DES COLL_TERM AGREE_TERM U_MEMO1
                     U_MEMO2 U_MEMO3 U_MEMO4 U_MEMO5 U_TXT1 PROD_CD PROD_DES SIZE_DES UQTY
                     QTY PRICE USER_PRICE_VAT SUPPLY_AMT SUPPLY_AMT_F VAT_AMT REMARKS
                     ITEM_CD P_AMT1 P_AMT2 P_REMARKS1 P_REMARKS2 P_REMARKS3/;
 
-    my $params = $self->_build_bulk_data($key, \@REQUIRED, \@PARAMS, @quotations);
+    my $rules = Validation::Class::Simple->new(
+        fields => {
+            UPLOAD_SER_NO => { required => 1 },
+            PROD_CD       => { required => 1 },
+            QTY           => { required => 1 },
+            IO_TYPE       => { max_length => 2 },
+            EXCHANGE_TYPE => { max_length => 5 },
+        }
+    );
+
+    my $params = $self->_build_bulk_data($key, $rules, \@PARAMS, @quotations);
     unless ($params) {
         warn "Failed to build bulk data";
         return;
