@@ -89,9 +89,7 @@ id-ID: Indonesian
 
 sub new {
     my ($class, %args) = @_;
-    return unless $args{com_code};
-    return unless $args{user_id};
-    return unless $args{api_cert_key};
+    return unless $args{session_id} or ($args{com_code} and $args{user_id} and $args{api_cert_key});
     return unless $args{zone};
 
     my $login = {};
@@ -104,6 +102,16 @@ sub new {
             Accept => 'application/json'
         }
     );
+
+    my $self = {
+        login => $login,
+        http  => $http,
+    };
+
+    if ($args{session_id}) {
+        $self->{session_id} = $args{session_id};
+        return bless $self, $class;
+    }
 
     my $url = sprintf('https://oapi%s.ecounterp.com/OAPI/V2/OAPILogin', lc $login->{zone});
 
@@ -138,12 +146,7 @@ sub new {
         return;
     }
 
-    my $self = {
-        login      => $login,
-        http       => $http,
-        session_id => $session_id,
-    };
-
+    $self->{session_id} = $session_id;
     return bless $self, $class;
 }
 
