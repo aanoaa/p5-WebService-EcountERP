@@ -374,7 +374,6 @@ sub _add_products {
     my ($self, $url, $key, @products) = @_;
     return unless $self->is_auth;
 
-    my @REQUIRED = qw/PROD_CD PROD_DES/;
     my @PARAMS = qw/PROD_CD PROD_DES SIZE_FLAG SIZE_DES UNIT PROD_TYPE SET_FLAG BAL_FLAG
                     WH_CD IN_PRICE IN_PRICE_VAT OUT_PRICE OUT_PRICE_VAT REMARKS_WIN
                     CLASS_CD CLASS_CD2 CLASS_CD3 BAR_CODE VAT_YN TAX VAT_RATE_BY_BASE_YN
@@ -393,7 +392,53 @@ sub _add_products {
                     NO_USER8 NO_USER9 NO_USER10 ITEM_TYPE SERIAL_TYPE PROD_SELL_TYPE
                     PROD_WHMOVE_TYPE QC_BUY_TYPE QC_YN/;
 
-    my $params = $self->_build_bulk_data($key, \@REQUIRED, \@PARAMS, @products);
+    my $regexYN   = qr/^[YN]$/;
+    my $regexMBYN = qr/^[MBYN]$/;
+    my $regexBYN  = qr/^[BYN]$/;
+    my $regex01   = qr/^[10]$/;
+    my $regex012  = qr/^[012]$/;
+    my $rules = Validation::Class::Simple->new(
+        fields => {
+            PROD_CD            => { required => 1 },
+            PROD_DES           => { required => 1 },
+            SIZE_FLAG          => { pattern => qr/^[1234]$/ },   # 규격구분설정(1:규격명, 2:규격그룹, 3:규격계산, 4:규격계산그룹)
+            PROD_TYPE          => { pattern => qr/^[041237]$/ }, # 품목구분 : 원재료0, 부재료4, 제품1, 반제품2, 상품3, 무형상품7
+            SET_FLAG           => { pattern => $regex01 },
+            BAL_FLAG           => { pattern => $regex01 },
+            IN_PRICE_VAT       => { pattern => $regex01 },
+            OUT_PRICE_VAT      => { pattern => $regex01 },
+            VAT_YN             => { pattern => $regexYN },
+            CS_FLAG            => { pattern => $regex01 },
+            INSPECT_STATUS     => { pattern => qr/^[LS]$/ },     # 품질검사방법설정(L:전수, S:샘플링)
+            SAFE_A0001         => { pattern => $regex012 },
+            SAFE_A0002         => { pattern => $regex012 },
+            SAFE_A0003         => { pattern => $regex012 },
+            SAFE_A0004         => { pattern => $regex012 },
+            SAFE_A0005         => { pattern => $regex012 },
+            SAFE_A0006         => { pattern => $regex012 },
+            SAFE_A0007         => { pattern => $regex012 },
+            CSORD_C0001        => { pattern => $regexBYN },
+            CSORD_C0003        => { pattern => $regexYN },
+            OUT_PRICE1_VAT_YN  => { pattern => $regexYN },
+            OUT_PRICE2_VAT_YN  => { pattern => $regexYN },
+            OUT_PRICE3_VAT_YN  => { pattern => $regexYN },
+            OUT_PRICE4_VAT_YN  => { pattern => $regexYN },
+            OUT_PRICE5_VAT_YN  => { pattern => $regexYN },
+            OUT_PRICE6_VAT_YN  => { pattern => $regexYN },
+            OUT_PRICE7_VAT_YN  => { pattern => $regexYN },
+            OUT_PRICE8_VAT_YN  => { pattern => $regexYN },
+            OUT_PRICE9_VAT_YN  => { pattern => $regexYN },
+            OUT_PRICE10_VAT_YN => { pattern => $regexYN },
+            ITEM_TYPE          => { pattern => $regexMBYN },
+            SERIAL_TYPE        => { pattern => $regexMBYN },
+            PROD_SELL_TYPE     => { pattern => $regexBYN },
+            PROD_WHMOVE_TYPE   => { pattern => $regexBYN },
+            QC_BUY_TYPE        => { pattern => $regexBYN },
+            QC_YN              => { pattern => $regexYN },
+        }
+    );
+
+    my $params = $self->_build_bulk_data($key, $rules, \@PARAMS, @products);
     unless ($params) {
         warn "Failed to build bulk data";
         return;
