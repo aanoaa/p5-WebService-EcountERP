@@ -22,28 +22,19 @@ SKIP: {
     my @sellers = (
         {
             BUSINESS_NO => '1234567890',
-            CUST_NAME => 'create customer api test by hshong'
+            CUST_NAME   => 'test seller'
         }
     );
 
-    my $added;
-    $added = $erp->add('sellers', @sellers);
-    is($added, scalar @sellers, 'seller added');
+    my $res;
+    $res = $erp->add('sellers', @sellers);
+    ok($res, 'authenticated');
+    ok($res->{success}, 'seller added');
 
-    $added = $erp->add('sellers', @sellers);
-    is($added, 0, 'duplicated');
-
-    @sellers = (
-        {
-            BUSINESS_NO     => '1234567890',
-            CUST_NAME       => 'test',
-            G_GUBUN         => '50',
-            CUST_LIMIT_TERM => 400,
-        },
-    );
-
-    $added = $erp->add('sellers', @sellers);
-    is($added, undef, 'invalid params');
+    $res = $erp->add('sellers', @sellers);
+    is($res->{success}, undef, 'duplicated');
+    diag($res->errors_to_string);
+    ok($res->errors_to_string, 'filled error');
 }
 
 done_testing();
