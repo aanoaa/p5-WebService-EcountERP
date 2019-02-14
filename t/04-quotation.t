@@ -27,27 +27,12 @@ SKIP: {
         }
     );
 
-    my $added;
-    $added = $erp->add('quotations', @quotations);
-    is($added, scalar @quotations, 'seller added');
+    my $res;
+    $res = $erp->add('quotations', @quotations);
+    ok($res->{success}, 'quotations added');
 
-    $added = $erp->add('quotations', @quotations);
-    is($added, 0, 'duplicated');
-
-    @quotations = (
-        {
-            UPLOAD_SER_NO => '',
-        },
-        {
-            IO_TYPE => '1234',
-        },
-        {
-            EXCHANGE_TYPE => '123123123'
-        }
-    );
-
-    $added = $erp->add('quotations', @quotations);
-    is($added, undef, 'invalid params');
+    $res = $erp->add('quotations', @quotations);
+    is($res->{success}, undef, 'duplicated');
 }
 
 done_testing();

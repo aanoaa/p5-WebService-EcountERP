@@ -37,27 +37,12 @@ SKIP: {
         }
     );
 
-    my $added;
-    $added = $erp->add('sales', @sales);
-    is($added, scalar @sales, 'seller added');
+    my $res;
+    $res = $erp->add('sales', @sales);
+    ok($res->{success}, 'sales added');
 
-    $added = $erp->add('sales', @sales);
-    is($added, 0, 'duplicated');
-
-    @sales = (
-        {
-            UPLOAD_SER_NO => '',
-        },
-        {
-            REL_DATE => 1231123123123,
-        },
-        {
-            MAKE_FLAG => 'O'
-        }
-    );
-
-    $added = $erp->add('sales', @sales);
-    is($added, undef, 'invalid params');
+    $res = $erp->add('sales', @sales);
+    is($res->{success}, undef, 'duplicated');
 }
 
 done_testing();

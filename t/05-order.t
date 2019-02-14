@@ -28,27 +28,12 @@ SKIP: {
         }
     );
 
-    my $added;
-    $added = $erp->add('orders', @orders);
-    is($added, scalar @orders, 'seller added');
+    my $res;
+    $res = $erp->add('orders', @orders);
+    ok($res->{success}, 'orders added');
 
-    $added = $erp->add('orders', @orders);
-    is($added, 0, 'duplicated');
-
-    @orders = (
-        {
-            UPLOAD_SER_NO => '',
-        },
-        {
-            EXCHANGE_TYPE => '1234abcdfsf',
-        },
-        {
-            ITEM_TIME_DATE => 'afsdfjkdsljflkasjdfkl'
-        }
-    );
-
-    $added = $erp->add('orders', @orders);
-    is($added, undef, 'invalid params');
+    $res = $erp->add('orders', @orders);
+    is($res->{success}, undef, 'duplicated');
 }
 
 done_testing();

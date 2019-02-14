@@ -26,27 +26,12 @@ SKIP: {
         },
     );
 
-    my $added;
-    $added = $erp->add('products', @products);
-    is($added, scalar @products, 'seller added');
+    my $res;
+    $res = $erp->add('products', @products);
+    ok($res->{success}, 'products added');
 
-    $added = $erp->add('products', @products);
-    is($added, 0, 'duplicated');
-
-    @products = (
-        {
-            VAT_YN => 'M',
-        },
-        {
-            PROD_CD => '',
-        },
-        {
-            CSORD_C0003 => '1010'
-        }
-    );
-
-    $added = $erp->add('products', @products);
-    is($added, undef, 'invalid params');
+    $res = $erp->add('products', @products);
+    is($res->{success}, undef, 'duplicated');
 }
 
 done_testing();

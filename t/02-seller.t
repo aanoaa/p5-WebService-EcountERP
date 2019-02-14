@@ -33,7 +33,6 @@ SKIP: {
 
     $res = $erp->add('sellers', @sellers);
     is($res->{success}, undef, 'duplicated');
-    diag($res->errors_to_string);
     ok($res->errors_to_string, 'filled error');
 }
 
