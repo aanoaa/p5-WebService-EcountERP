@@ -381,56 +381,11 @@ sub _add_products {
                     NO_USER8 NO_USER9 NO_USER10 ITEM_TYPE SERIAL_TYPE PROD_SELL_TYPE
                     PROD_WHMOVE_TYPE QC_BUY_TYPE QC_YN/;
 
-    my $regexYN   = qr/^[YN]$/;
-    my $regexMBYN = qr/^[MBYN]$/;
-    my $regexBYN  = qr/^[BYN]$/;
-    my $regex01   = qr/^[10]$/;
-    my $regex012  = qr/^[012]$/;
-    my $rules = Validation::Class::Simple->new(
-        fields => {
-            PROD_CD            => { required => 1 },
-            PROD_DES           => { required => 1 },
-            SIZE_FLAG          => { pattern => qr/^[1234]$/ },   # 규격구분설정(1:규격명, 2:규격그룹, 3:규격계산, 4:규격계산그룹)
-            PROD_TYPE          => { pattern => qr/^[041237]$/ }, # 품목구분 : 원재료0, 부재료4, 제품1, 반제품2, 상품3, 무형상품7
-            SET_FLAG           => { pattern => $regex01 },
-            BAL_FLAG           => { pattern => $regex01 },
-            IN_PRICE_VAT       => { pattern => $regex01 },
-            OUT_PRICE_VAT      => { pattern => $regex01 },
-            VAT_YN             => { pattern => $regexYN },
-            CS_FLAG            => { pattern => $regex01 },
-            INSPECT_STATUS     => { pattern => qr/^[LS]$/ },     # 품질검사방법설정(L:전수, S:샘플링)
-            SAFE_A0001         => { pattern => $regex012 },
-            SAFE_A0002         => { pattern => $regex012 },
-            SAFE_A0003         => { pattern => $regex012 },
-            SAFE_A0004         => { pattern => $regex012 },
-            SAFE_A0005         => { pattern => $regex012 },
-            SAFE_A0006         => { pattern => $regex012 },
-            SAFE_A0007         => { pattern => $regex012 },
-            CSORD_C0001        => { pattern => $regexBYN },
-            CSORD_C0003        => { pattern => $regexYN },
-            OUT_PRICE1_VAT_YN  => { pattern => $regexYN },
-            OUT_PRICE2_VAT_YN  => { pattern => $regexYN },
-            OUT_PRICE3_VAT_YN  => { pattern => $regexYN },
-            OUT_PRICE4_VAT_YN  => { pattern => $regexYN },
-            OUT_PRICE5_VAT_YN  => { pattern => $regexYN },
-            OUT_PRICE6_VAT_YN  => { pattern => $regexYN },
-            OUT_PRICE7_VAT_YN  => { pattern => $regexYN },
-            OUT_PRICE8_VAT_YN  => { pattern => $regexYN },
-            OUT_PRICE9_VAT_YN  => { pattern => $regexYN },
-            OUT_PRICE10_VAT_YN => { pattern => $regexYN },
-            ITEM_TYPE          => { pattern => $regexMBYN },
-            SERIAL_TYPE        => { pattern => $regexMBYN },
-            PROD_SELL_TYPE     => { pattern => $regexBYN },
-            PROD_WHMOVE_TYPE   => { pattern => $regexBYN },
-            QC_BUY_TYPE        => { pattern => $regexBYN },
-            QC_YN              => { pattern => $regexYN },
-        }
-    );
-
-    my $params = $self->_build_bulk_data($key, $rules, \@PARAMS, @products);
+    my $params = $self->_build_bulk_data($key, \@PARAMS, @products);
     unless ($params) {
-        warn "Failed to build bulk data";
-        return;
+        return WebService::EcountERP::Result->new(
+            errors => ["Failed to build bulk data"],
+        );
     }
 
     my $http = $self->{http};
@@ -443,8 +398,10 @@ sub _add_products {
     });
 
     unless ($res->{success}) {
-        warn "$res->{status}: $res->{reason}\n";
-        return;
+        return WebService::EcountERP::Result->new(
+            response => $res,
+            errors   => ["$res->{status}: $res->{reason}"],
+        );
     }
 
     my $expected = scalar @{ $params->{$key} };
@@ -504,20 +461,11 @@ sub _add_quotations {
                     QTY PRICE USER_PRICE_VAT SUPPLY_AMT SUPPLY_AMT_F VAT_AMT REMARKS
                     ITEM_CD P_AMT1 P_AMT2 P_REMARKS1 P_REMARKS2 P_REMARKS3/;
 
-    my $rules = Validation::Class::Simple->new(
-        fields => {
-            UPLOAD_SER_NO => { required => 1 },
-            PROD_CD       => { required => 1 },
-            QTY           => { required => 1 },
-            IO_TYPE       => { max_length => 2 },
-            EXCHANGE_TYPE => { max_length => 5 },
-        }
-    );
-
-    my $params = $self->_build_bulk_data($key, $rules, \@PARAMS, @quotations);
+    my $params = $self->_build_bulk_data($key, \@PARAMS, @quotations);
     unless ($params) {
-        warn "Failed to build bulk data";
-        return;
+        return WebService::EcountERP::Result->new(
+            errors => ["Failed to build bulk data"],
+        );
     }
 
     my $http = $self->{http};
@@ -530,8 +478,10 @@ sub _add_quotations {
     });
 
     unless ($res->{success}) {
-        warn "$res->{status}: $res->{reason}\n";
-        return;
+        return WebService::EcountERP::Result->new(
+            response => $res,
+            errors   => ["$res->{status}: $res->{reason}"],
+        );
     }
 
     my $expected = scalar @{ $params->{$key} };
@@ -599,25 +549,11 @@ sub _add_orders {
                     SUPPLY_AMT_F VAT_AMT ITEM_TIME_DATE REMARKS ITEM_CD P_AMT1 P_AMT2
                     P_REMARKS1 P_REMARKS2 P_REMARKS3 REL_DATE REL_NO/;
 
-    my $rules = Validation::Class::Simple->new(
-        fields => {
-            UPLOAD_SER_NO  => { required => 1 },
-            WH_CD          => { required => 1, max_length => 5 },
-            PROD_CD        => { required => 1 },
-            QTY            => { required => 1 },
-            IO_TYPE        => { max_length => 2 },
-            EXCHANGE_TYPE  => { max_length => 5 },
-            TIME_DATE      => { max_length => 8 },
-            U_MEMO1        => { max_length => 6 },
-            ITEM_TIME_DATE => { max_length => 8 },
-            REL_DATE       => { max_length => 8 },
-        }
-    );
-
-    my $params = $self->_build_bulk_data($key, $rules, \@PARAMS, @orders);
+    my $params = $self->_build_bulk_data($key, \@PARAMS, @orders);
     unless ($params) {
-        warn "Failed to build bulk data";
-        return;
+        return WebService::EcountERP::Result->new(
+            errors => ["Failed to build bulk data"],
+        );
     }
 
     my $http = $self->{http};
@@ -630,8 +566,10 @@ sub _add_orders {
     });
 
     unless ($res->{success}) {
-        warn "$res->{status}: $res->{reason}\n";
-        return;
+        return WebService::EcountERP::Result->new(
+            response => $res,
+            errors   => ["$res->{status}: $res->{reason}"],
+        );
     }
 
     my $expected = scalar @{ $params->{$key} };
@@ -698,24 +636,11 @@ sub _add_sales {
                     SUPPLY_AMT SUPPLY_AMT_F VAT_AMT REMARKS ITEM_CD P_AMT1 P_AMT2
                     P_REMARKS1 P_REMARKS2 P_REMARKS3 REL_DATE REL_NO MAKE_FLAG CUST_AMT/;
 
-    my $rules = Validation::Class::Simple->new(
-        fields => {
-            UPLOAD_SER_NO => { required => 1 },
-            WH_CD         => { required => 1, max_length => 5 },
-            PROD_CD       => { required => 1 },
-            QTY           => { required => 1 },
-            IO_TYPE       => { max_length => 2 },
-            EXCHANGE_TYPE => { max_length => 5 },
-            U_MEMO1       => { max_length => 6 },
-            REL_DATE      => { max_length => 8 },
-            MAKE_FLAG     => { pattern => qr/^[YN]$/ },
-        }
-    );
-
-    my $params = $self->_build_bulk_data($key, $rules, \@PARAMS, @sales);
+    my $params = $self->_build_bulk_data($key, \@PARAMS, @sales);
     unless ($params) {
-        warn "Failed to build bulk data";
-        return;
+        return WebService::EcountERP::Result->new(
+            errors => ["Failed to build bulk data"],
+        );
     }
 
     my $http = $self->{http};
@@ -728,8 +653,10 @@ sub _add_sales {
     });
 
     unless ($res->{success}) {
-        warn "$res->{status}: $res->{reason}\n";
-        return;
+        return WebService::EcountERP::Result->new(
+            response => $res,
+            errors   => ["$res->{status}: $res->{reason}"],
+        );
     }
 
     my $expected = scalar @{ $params->{$key} };
