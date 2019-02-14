@@ -1,4 +1,4 @@
-# WebService-EcouptERP #
+# WebService-EcountERP #
 
 perl interface to ecounterp.com
 
