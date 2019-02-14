@@ -20,13 +20,26 @@ WebService::EcountERP - Perl interface to EcountERP API
 =head1 SYNOPSIS
 
     my $erp = WebService::EcountERP->new(
-      com_code     => '1234567',
-      user_id      => 'username',
-      api_cert_key => 'xxxxxxx',
-      zone         => 'C'
+        com_code     => '1234567',
+        user_id      => 'username',
+        api_cert_key => 'xxxxxxx',
+        zone         => 'C'
     );
 
-    die "Failed to signed in" unless $erp->login;
+    ## reuse session_id
+    my $erp = WebService::EcountERP->new(
+        session_id => 'xxxxxx',
+        zone       => 'C'
+    );
+
+    die "login failed" unless $erp;
+
+    my $result = $erp->add('products', @products);
+    die "wrong products parameter spec" unless $result;
+
+    unless ($result->{success}) {
+        print $result->errors_to_string;
+    }
 
 =cut
 
