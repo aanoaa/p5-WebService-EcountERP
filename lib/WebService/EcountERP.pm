@@ -8,7 +8,8 @@ use experimental 'switch';
 
 use HTTP::Tiny;
 use JSON::PP;
-use Validation::Class::Simple;
+
+use WebService::EcountERP::Result;
 
 =encoding utf8
 
@@ -192,36 +193,41 @@ sub parse_response {
     my ($self, $res, $expected) = @_;
 
     my $out = $res->{content};
-    my $result = decode_json $out;
+    my $data = decode_json $out;
 
-    my $status = $result->{Status};
+    my $result = WebService::EcountERP::Result->new(
+        response => $res
+    );
+
+    my $status = $data->{Status};
     if ($status !~ m/200/ ) {
-        my $error  = $result->{Error}{Message} || "Unknown error occurred: $out";
-        my $detail = $result->{Error}{MessageDetail};
-        warn "$status: $error\n";
-        warn "  $detail\n" if $detail;
-        return 0;
+        my $error  = $data->{Error}{Message} || "Unknown error occurred: $out";
+        my $detail = $data->{Error}{MessageDetail};
+        push @{ $result->{errors} }, $error;
+        push @{ $result->{errors} }, $detail if $detail;
+        return $result;
     }
 
-    my $success_cnt = $result->{Data}{SuccessCnt};
-    my $failed_cnt  = $result->{Data}{FailCnt};
+    my $success_cnt = $result->{success_cnt} = $data->{Data}{SuccessCnt};
+    my $failed_cnt  = $result->{failed_cnt}  = $data->{Data}{FailCnt};
     if ($success_cnt != $expected) {
-        for my $detail (@{ $result->{Data}{ResultDetails} }) {
-            next if my $is_success = $detail->{IsSuccess};
-
-            my $n       = $detail->{Line};
-            my $error   = $detail->{TotalError};
-            warn "Line($n): $error";
+        my $details = $data->{Data}{DataDetails} || $data->{Data}{ResultDetails};
+        for my $detail (@$details) {
+            my $n     = $detail->{Line};
+            my $error = $detail->{TotalError};
+            push @{ $result->{errors} }, "Line($n): $error";
 
             for my $err (@{ $detail->{Errors} }) {
                 my $column  = $err->{ColCd};
                 my $message = $err->{Message};
-                warn "  $column: $message";
+                push @{ $result->{errors} }, "  $column: $message";
             }
         }
+    } else {
+        $result->{success} = 1;
     }
 
-    return $success_cnt;
+    return $result;
 }
 
 =head2 add($type => \%params)
@@ -308,30 +314,11 @@ sub _add_sellers {
                     CUST_LIMIT_TERM CONT1 CONT2 CONT3 CONT4 CONT5 CONT6 NO_CUST_USER1
                     NO_CUST_USER2 NO_CUST_USER3 CANCEL/;
 
-    my $regexYN = qr/^[YN]$/;
-    my $regexMBYN = qr/^[MBYN]$/;
-    my $rules = Validation::Class::Simple->new(
-        fields => {
-            BUSINESS_NO        => { required => 1 },
-            CUST_NAME          => { required => 1 },
-            G_GUBUN            => { pattern => qr/^0[123]$/ },
-            G_BUSINESS_TYPE    => { pattern => qr/^[123]$/ },
-            GUBUN              => { pattern => qr/^1[13]$/ }, # 일반거래처 : 11, 관세사거래처 : 13
-            FOREIGN_FLAG       => { pattern => $regexYN },
-            OUTORDER_YN        => { pattern => $regexYN },
-            IO_CODE_SL_BASE_YN => { pattern => $regexYN },
-            IO_CODE_BY_BASE_YN => { pattern => $regexYN },
-            MANAGE_BOND_NO     => { pattern => $regexMBYN },
-            MANAGE_DEBIT_NO    => { pattern => $regexMBYN },
-            CUST_LIMIT_TERM    => { between => '1-365' },
-            CANCEL             => { pattern => $regexYN },
-        }
-    );
-
-    my $params = $self->_build_bulk_data($key, $rules, \@PARAMS, @sellers);
+    my $params = $self->_build_bulk_data($key, \@PARAMS, @sellers);
     unless ($params) {
-        warn "Failed to build bulk data";
-        return;
+        return WebService::EcountERP::Result->new(
+            errors => ["Failed to build bulk data"],
+        );
     }
 
     my $http = $self->{http};
@@ -344,8 +331,10 @@ sub _add_sellers {
     });
 
     unless ($res->{success}) {
-        warn "$res->{status}: $res->{reason}\n";
-        return;
+        return WebService::EcountERP::Result->new(
+            response => $res,
+            errors   => ["$res->{status}: $res->{reason}"],
+        );
     }
 
     my $expected = scalar @{ $params->{$key} };
@@ -747,16 +736,14 @@ sub _add_sales {
     return $self->parse_response($res, $expected);
 }
 
-=head2 _build_bulk_data($key, $rules, \@params, @items)
+=head2 _build_bulk_data($key, \@params, @items)
 
 C<$key> is string.
-
-C<$rules> is L<Validation::Class::Simple> object.
 
 =cut
 
 sub _build_bulk_data {
-    my ($self, $key, $rules, $params, @items) = @_;
+    my ($self, $key, $params, @items) = @_;
     return unless $key;
     return unless $params;
     return unless @items;
@@ -767,21 +754,15 @@ sub _build_bulk_data {
     my $line = 0;
     my @data;
     for my $item (@items) {
-        $rules->reset_params($item);
-        unless ($rules->validate) {
-            warn $rules->errors_to_string;
-            next;
-        }
-
         my %param;
-        for my $key (keys %$item) {
-            my $value = $item->{$key};
-            unless ($available{$key}) {
-                warn "Invalid parameter: $key($value)";
+        for my $column (keys %$item) {
+            my $value = $item->{$column};
+            unless ($available{$column}) {
+                warn "[$key] Invalid parameter: $column($value)";
                 next;
             }
 
-            $param{$key} = $value;
+            $param{$column} = $value;
         }
 
         push @data, {
@@ -792,16 +773,5 @@ sub _build_bulk_data {
 
     return @data ? { $key => \@data } : undef;
 }
-
-# login(로그인)
-# customer(거래처 등록)
-# product(품목등록)
-# Quotation(견적서 입력)
-# order(주문서 입력)
-# sales or sell(판매입력)
-# 작업지시서 입력
-# 생산불출입력
-# 매출-매입전표 II 자동분개
-# 주문API 쇼핑몰관리
 
 1;
