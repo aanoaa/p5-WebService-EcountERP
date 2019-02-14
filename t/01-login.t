@@ -18,14 +18,11 @@ SKIP: {
         com_code     => $com_code,
         user_id      => $user_id,
         api_cert_key => $api_cert_key,
-        zone         => $zone
+        zone         => $zone,
+        session      => '.tmp-session',
     );
 
     ok($erp, 'new');
-
-    my $session_id = $erp->{session_id};
-    open my $fh, '>', '.tmp-session' or die "Can't open .tmp-session: $!";
-    print $fh $session_id;
 }
 
 done_testing();

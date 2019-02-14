@@ -23,7 +23,8 @@ WebService::EcountERP - Perl interface to EcountERP API
         com_code     => '1234567',
         user_id      => 'username',
         api_cert_key => 'xxxxxxx',
-        zone         => 'C'
+        zone         => 'C',
+        sesssion     => 'session-file',
     );
 
     ## reuse session_id
@@ -106,7 +107,7 @@ id-ID: Indonesian
 
 sub new {
     my ($class, %args) = @_;
-    return unless $args{session_id} or ($args{com_code} and $args{user_id} and $args{api_cert_key});
+    return unless $args{session} or ($args{com_code} and $args{user_id} and $args{api_cert_key});
     return unless $args{zone};
 
     my $login = {};
@@ -124,6 +125,14 @@ sub new {
         login => $login,
         http  => $http,
     };
+
+    my $session_file = $args{session};
+    if ($session_file and -e $session_file) {
+        open my $fh, '<', $session_file or die "Can't open $session_file: $!";
+        my $session_id = <$fh>;
+        $self->{session_id} = $session_id;
+        return bless $self, $class;
+    }
 
     if ($args{session_id}) {
         $self->{session_id} = $args{session_id};
@@ -161,6 +170,12 @@ sub new {
     unless ($session_id = $result->{Data}{Datas}{SESSION_ID}) {
         warn "Session ID not found: $out\n";
         return;
+    }
+
+    if ($session_file) {
+        open my $fh, '>', $session_file or die "Can't open $session_file: $!";
+        print $fh $session_id;
+        close $fh;
     }
 
     $self->{session_id} = $session_id;

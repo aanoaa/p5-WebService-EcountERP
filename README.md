@@ -12,8 +12,8 @@ my $erp = WebService::EcountERP->new(
 
 ## reuse session_id
 my $erp = WebService::EcountERP->new(
-    session_id => 'xxxxxx',
-    zone       => 'C'
+    session => 'session-file',
+    zone    => 'C'
 );
 
 die "login failed" unless $erp;
